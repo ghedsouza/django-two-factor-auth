@@ -138,6 +138,7 @@ def class_view_decorator(function_decorator):
         return View
     return simple_decorator
 
+
 def get_django_username(user):
     """
     Accounts for USERNAME_FIELD that may be set on custom user models.

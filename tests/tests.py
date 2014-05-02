@@ -28,103 +28,14 @@ from two_factor.gateways.twilio.gateway import Twilio
 from two_factor.models import PhoneDevice, phone_number_validator
 from two_factor.utils import backup_phones, default_device, get_otpauth_url
 
+from .models import CustomUser
+
 
 class UserMixin(object):
     def setUp(self):
         super(UserMixin, self).setUp()
         self.user = User.objects.create_user('bouke', None, 'secret')
         assert self.client.login(username='bouke', password='secret')
-
-from django.db import models
-from django.contrib.auth.models import (
-    AbstractBaseUser,
-    Permission,
-    UserManager,
-    BaseUserManager,
-    )
-from django.utils import timezone
-
-class CustomUserManager(BaseUserManager):
-    # Implementation based on:
-    # https://github.com/django/django/blob/a9093dd3763df6b2045a08b0520f248bda708723/django/contrib/auth/models.py#L162
-    # But with the 'username' field dropped ('email' is used as username field)
-
-    def _create_user(self, email, password,
-                     is_staff, **extra_fields):
-        now = timezone.now()
-        if not email:
-            raise ValueError('The given email must be set')
-        email = self.normalize_email(email)
-        user = self.model(email=email,
-                          is_staff=is_staff, is_active=True,
-                          last_login=now,
-                          date_joined=now, **extra_fields)
-        user.set_password(password)
-        user.save(using=self._db)
-        return user
-
-    def create_user(self, email, password=None, **extra_fields):
-        return self._create_user(email, password, False,
-                                 **extra_fields)
-
-    def create_superuser(self, email, password, **extra_fields):
-        return self._create_user(email, password, True,
-                                 **extra_fields)
-
-
-class CustomUser(AbstractBaseUser):
-    """
-    Some of this was copied from:
-    https://github.com/django/django/blob/master/django/contrib/auth/models.py#L353
-    """
-    first_name = models.CharField(max_length=255, blank=True)
-
-    last_name = models.CharField(max_length=255, blank=True)
-
-    title = models.CharField(max_length=255, blank=True)
-
-    email = models.EmailField('email address', max_length=255,
-                              blank=True, unique=True)
-
-    is_staff = models.BooleanField('staff status', default=False,
-                help_text='Designates whether the user can log into this admin '
-                          'site.')
-
-    is_active = models.BooleanField('active', default=True,
-                help_text='Designates whether this user should be treated as '
-                          'active. Unselect this instead of deleting accounts.')
-
-    date_joined = models.DateTimeField('date joined', default=timezone.now)
-
-    permissions = models.ManyToManyField(Permission,
-                                         related_name="auth_user_set",
-                                         blank=True)
-
-    is_demo = models.BooleanField(default=False, verbose_name='Demo Account?')
-
-    phone_number = models.CharField(max_length=255, blank=True)
-
-    objects = CustomUserManager()
-
-    USERNAME_FIELD = 'email'
-
-    class Meta:
-        app_label = 'tests'
-        abstract = False
-
-    def has_perm(self, perm, obj=None):
-        print "has_perm: {}, {}".format(perm, obj)
-
-        return self.is_staff
-
-    def has_module_perms(self, app_label):
-        return self.is_staff
-
-    def get_full_name(self):
-        return u"{} {}".format(self.first_name, self.last_name)
-
-    def get_short_name(self):
-        return self.get_full_name()
 
 
 class CustomAdminUserMixin(object):
@@ -318,6 +229,7 @@ class LoginTest(TestCase):
         self.assertRedirects(response, str(settings.LOGIN_REDIRECT_URL))
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class SetupTest(CustomUserMixin, TestCase):
     def test_form(self):
         response = self.client.get(reverse('two_factor:setup'))
@@ -447,6 +359,7 @@ class SetupTest(CustomUserMixin, TestCase):
         self.assertRedirects(response, reverse('two_factor:setup_complete'))
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class OTPRequiredMixinTest(TestCase):
     @override_settings(LOGIN_URL=None)
     def test_not_configured(self):
@@ -514,6 +427,7 @@ class OTPRequiredMixinTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class AdminPatchTest(TestCase):
     def setUp(self):
         patch_admin()
@@ -527,7 +441,7 @@ class AdminPatchTest(TestCase):
                                  urlencode({'next': '/admin/'}))
         self.assertRedirects(response, redirect_to)
 
-
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class AdminSiteTest(CustomAdminUserMixin, TestCase):
     def setUp(self):
         super(AdminSiteTest, self).setUp()
@@ -553,7 +467,7 @@ class AdminSiteTest(CustomAdminUserMixin, TestCase):
         response = self.client.get('/otp_admin/')
         self.assertEqual(response.status_code, 200)
 
-
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class BackupTokensTest(OTPUserMixin, TestCase):
     def test_empty(self):
         response = self.client.get(reverse('two_factor:backup_tokens'))
@@ -579,7 +493,7 @@ class BackupTokensTest(OTPUserMixin, TestCase):
                          response.context_data['device'].token_set.all()])
         self.assertNotEqual(first_set, second_set)
 
-
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class PhoneSetupTest(OTPUserMixin, TestCase):
     def test_form(self):
         response = self.client.get(reverse('two_factor:phone_create'))
@@ -637,6 +551,7 @@ class PhoneSetupTest(OTPUserMixin, TestCase):
             {'number': [six.text_type(phone_number_validator.message)]})
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class PhoneDeleteTest(OTPUserMixin, TestCase):
     def setUp(self):
         super(PhoneDeleteTest, self).setUp()
@@ -655,6 +570,7 @@ class PhoneDeleteTest(OTPUserMixin, TestCase):
         self.assertContains(response, 'was not found', status_code=404)
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class QRTest(CustomUserMixin, TestCase):
     test_secret = 'This is a test secret for an OTP Token'
     test_img = 'This is a test string that represents a QRCode'
@@ -693,6 +609,7 @@ class QRTest(CustomUserMixin, TestCase):
         self.assertEquals(response['Content-Type'], 'image/svg+xml; charset=utf-8')
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class DisableTest(OTPUserMixin, TestCase):
     def test(self):
         response = self.client.get(reverse('two_factor:disable'))
@@ -712,6 +629,7 @@ class DisableTest(OTPUserMixin, TestCase):
         self.assertRedirects(response, str(settings.LOGIN_REDIRECT_URL))
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class TwilioGatewayTest(TestCase):
     def test_call_app(self):
         url = reverse('two_factor:twilio_call_app', args=['123456'])
@@ -780,6 +698,7 @@ class TwilioGatewayTest(TestCase):
                 twilio.make_call(device=Mock(number='+123'), token='654321')
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class FakeGatewayTest(TestCase):
     @patch('two_factor.gateways.fake.logger')
     def test_gateway(self, logger):
@@ -794,6 +713,7 @@ class FakeGatewayTest(TestCase):
             'Fake SMS to %s: "Your token is: %s"', '+123', '654321')
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class PhoneDeviceTest(TestCase):
     def test_verify(self):
         device = PhoneDevice(key=random_hex().decode())
@@ -810,9 +730,14 @@ class PhoneDeviceTest(TestCase):
         self.assertEqual('unknown (bouke)', str(device))
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class UtilsTest(TestCase):
     def test_default_device(self):
         # user = User.objects.create_user('bouke')
+        from django.core.management import call_command
+        call_command('flush', verbosity=0, interactive=True)
+        call_command('syncdb', verbosity=0)
+        # import pdb; pdb.set_trace()
         user = CustomUser.objects.create_user('bouke@example.com', 'secret')
         self.assertEqual(default_device(user), None)
 
@@ -836,6 +761,7 @@ class UtilsTest(TestCase):
         self.assertEqual(phones[0].pk, backup.pk)
 
 
+@override_settings(AUTH_USER_MODEL="tests.CustomUser")
 class ValidatorsTest(TestCase):
     def test_phone_number_validator_on_form_valid(self):
         class TestForm(forms.Form):

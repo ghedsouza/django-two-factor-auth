@@ -53,4 +53,4 @@ TEMPLATE_DIRS = (
 
 TWO_FACTOR_PATCH_ADMIN = False
 
-AUTH_USER_MODEL = "tests.CustomUser"
+# AUTH_USER_MODEL = "tests.CustomUser"
